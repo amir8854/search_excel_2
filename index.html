@@ -7,21 +7,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, collection, setDoc, doc, getDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
         const firebaseConfig = {
-  apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
-  authDomain: "amir8854-60513.firebaseapp.com",
-  projectId: "amir8854-60513",
-  storageBucket: "amir8854-60513.firebasestorage.app",
-  messagingSenderId: "994691127373",
-  appId: "1:994691127373:web:51894ca67eab2e7cde2404",
-  measurementId: "G-71693W741C"
-};
+            apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
+            authDomain: "amir8854-60513.firebaseapp.com",
+            projectId: "amir8854-60513",
+            storageBucket: "amir8854-60513.firebasestorage.app",
+            messagingSenderId: "994691127373",
+            appId: "1:994691127373:web:51894ca67eab2e7cde2404",
+            measurementId: "G-71693W741C"
+        };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
+        const storage = getStorage();
+
+        let latestFileData = {};  // Store latest file data to use in search
 
         window.showLogin = function() {
             document.getElementById("loginPanel").classList.remove("hidden");
@@ -34,6 +37,7 @@
                 alert("ورود موفقیت‌آمیز بود");
                 document.getElementById("adminPanel").classList.remove("hidden");
                 document.getElementById("loginPanel").classList.add("hidden");
+                loadFilesList();
             } else {
                 alert("نام کاربری یا رمز عبور اشتباه است");
             }
@@ -47,52 +51,140 @@
             }
 
             let file = fileInput.files[0];
-            let storage = getStorage();
             let storageRef = ref(storage, 'excelFiles/' + file.name);
             let uploadTask = uploadBytesResumable(storageRef, file);
 
             uploadTask.on('state_changed', 
-                (snapshot) => {
-                    // می‌توانید اینجا پیشرفت آپلود را نمایش دهید
-                }, 
+                (snapshot) => {},
                 (error) => {
                     console.error("خطا در آپلود فایل:", error);
                     alert("خطا در آپلود فایل. لطفاً دوباره تلاش کنید.");
                 }, 
                 async () => {
-                    // وقتی فایل با موفقیت آپلود شد
-                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    console.log("لینک فایل آپلود شده:", downloadURL);
+                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref());
+                    let data = await readExcelData(file);
+                    await setDoc(doc(db, "excelData", "latest"), { fileUrl: downloadURL, data });
 
-                    // حالا لینک فایل را در دیتابیس Firestore ذخیره می‌کنیم
-                    let jsonData = {};  // می‌توانید داده‌های اکسل را که نیاز دارید هم ارسال کنید
-                    await setDoc(doc(db, "excelData", "latest"), { fileUrl: downloadURL, data: jsonData });
+                    // بررسی ذخیره‌سازی
+                    let docSnap = await getDoc(doc(db, "excelData", "latest"));
+                    if (docSnap.exists()) {
+                        alert("فایل با موفقیت بارگذاری شد");
+                    } else {
+                        alert("خطا در ذخیره‌سازی فایل در دیتابیس.");
+                    }
 
-                    alert("فایل با موفقیت بارگذاری و به دیتابیس ارسال گردید");
-                    console.log("فایل در Firebase ذخیره شد:", downloadURL); // تایید بارگذاری در کنسول
+                    loadFilesList();  // Reload the file list after upload
                 }
             );
         };
 
+        async function readExcelData(file) {
+            const reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            return new Promise((resolve, reject) => {
+                reader.onload = async function(event) {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    let extractedData = {};
+                    rows.forEach((row, index) => {
+                        if (index === 0) return;  // Skip the header row
+                        extractedData[row[0]] = row.slice(1);  // First column as key, remaining as values
+                    });
+                    resolve(extractedData);
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        window.loadFilesList = async function() {
+            const filesListDiv = document.getElementById("filesList");
+            filesListDiv.innerHTML = "";
+            const querySnapshot = await getDocs(collection(db, "excelData"));
+            if (querySnapshot.empty) {
+                filesListDiv.innerHTML = "<p>فایلی در دیتابیس وجود ندارد. لطفاً به ادمین اطلاع دهید.</p>";
+                return;
+            }
+            querySnapshot.forEach((doc) => {
+                let fileData = doc.data();
+                let fileElement = document.createElement("div");
+                fileElement.innerHTML = `
+                    <span>${fileData.fileUrl}</span> - <span>${new Date(doc.id).toLocaleString()}</span>
+                    <button onclick="deleteFile('${doc.id}')">حذف</button>
+                `;
+                filesListDiv.appendChild(fileElement);
+            });
+        };
+
+        window.deleteFile = async function(fileId) {
+            await deleteDoc(doc(db, "excelData", fileId));
+            loadFilesList();
+            alert("فایل با موفقیت حذف شد");
+        };
+
         window.searchTerminal = async function() {
             let terminalCode = document.getElementById("terminalCode").value.trim();
-            if (!terminalCode || terminalCode.length !== 8 || !/^[0-9]+$/.test(terminalCode)) {
-                alert("کد پایانه باید ۸ رقمی و فقط شامل اعداد باشد!");
+            if (terminalCode.length !== 8) {
+                alert("کد پایانه باید ۸ رقمی باشد!");
                 return;
             }
 
             let docSnap = await getDoc(doc(db, "excelData", "latest"));
             if (docSnap.exists()) {
-                let data = docSnap.data().data;
-                if (data[terminalCode]) {
-                    document.getElementById("results").innerText = data[terminalCode].join(" | ");
-                    document.getElementById("results").style.display = "block";
+                console.log("Data from Firebase:", docSnap.data());  // بررسی داده‌ها از Firebase
+                latestFileData = docSnap.data().data;
+                if (latestFileData[terminalCode]) {
+                    displayResults(latestFileData[terminalCode]);
                 } else {
                     alert("کد پایانه در فایل نیست!");
                 }
             } else {
                 alert("لطفاً جهت بارگذاری دیتابیس به ادمین اطلاع دهید.");
             }
+        };
+
+        function displayResults(data) {
+            let resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = "";
+            data.forEach((item, index) => {
+                let box = document.createElement("div");
+                box.style.display = "inline-block";
+                box.style.margin = "5px";
+                box.style.padding = "10px";
+                box.style.background = "#f0f0f0";
+                box.style.borderRadius = "5px";
+                box.textContent = item;
+                if (index < 4) {
+                    box.style.width = "45%";
+                } else if (index < 8) {
+                    box.style.width = "45%";
+                } else {
+                    box.style.width = "90%";
+                }
+                resultsDiv.appendChild(box);
+            });
+            resultsDiv.style.display = "block";
+        }
+        
+        window.checkFileExistence = async function() {
+            const docSnap = await getDoc(doc(db, "excelData", "latest"));
+            if (!docSnap.exists()) {
+                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
+            }
+        };
+
+        // Restrict input to exactly 8 digits
+        document.getElementById("terminalCode").addEventListener("input", function(event) {
+            let value = event.target.value;
+            if (value.length > 8) {
+                event.target.value = value.slice(0, 8);
+            }
+        });
+
+        // Check file existence when page loads
+        window.onload = function() {
+            checkFileExistence();
         };
     </script>
     <style>
@@ -161,28 +253,23 @@
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <button onclick="showLogin()">ورود ادمین</button>
+    <div id="loginPanel">
+        <div class="container">
+            <input type="text" id="username" placeholder="نام کاربری" />
+            <input type="password" id="password" placeholder="رمز عبور" />
+            <button onclick="adminLogin()">ورود به پنل ادمین</button>
+        </div>
     </div>
-
-    <div class="container hidden" id="loginPanel">
-        <h2>ورود ادمین</h2>
-        <input type="text" id="username" placeholder="نام کاربری">
-        <input type="password" id="password" placeholder="رمز عبور">
-        <button onclick="adminLogin()">ورود</button>
+    <div id="adminPanel" class="hidden">
+        <button onclick="loadFilesList()">نمایش فایل‌های موجود</button>
+        <button onclick="uploadExcel()">بارگذاری فایل جدید</button>
+        <div id="filesList"></div>
+        <button onclick="deleteFile()">حذف فایل‌ها</button>
     </div>
-
-    <div class="container">
-        <h1>لطفا کد پایانه را وارد کنید</h1>
-        <input type="text" id="terminalCode" placeholder="کد پایانه (۸ رقمی)" oninput="this.value=this.value.replace(/[^0-9]/g, '');">
+    <div class="search-container">
+        <input type="text" id="terminalCode" placeholder="کد پایانه ۸ رقمی را وارد کنید" />
         <button onclick="searchTerminal()">جستجو</button>
-        <div id="results" class="results"></div>
     </div>
-
-    <div class="container hidden" id="adminPanel">
-        <h2>آپلود فایل اکسل</h2>
-        <input type="file" id="excelFile" accept=".xlsx, .xls">
-        <button onclick="uploadExcel()">بارگذاری فایل</button>
-    </div>
+    <div id="results" class="results"></div>
 </body>
 </html>
