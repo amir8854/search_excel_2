@@ -8,8 +8,9 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, collection, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
 
-      const firebaseConfig = {
+        const firebaseConfig = {
   apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
   authDomain: "amir8854-60513.firebaseapp.com",
   projectId: "amir8854-60513",
@@ -46,25 +47,31 @@
             }
 
             let file = fileInput.files[0];
-            let reader = new FileReader();
-            reader.readAsBinaryString(file);
-            reader.onload = async function(e) {
-                let data = new Uint8Array(e.target.result);
-                let workbook = XLSX.read(data, { type: 'array' });
-                let sheetName = workbook.SheetNames[0];
-                let sheet = workbook.Sheets[sheetName];
-                let jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+            let storage = getStorage();
+            let storageRef = ref(storage, 'excelFiles/' + file.name);
+            let uploadTask = uploadBytesResumable(storageRef, file);
 
-                let excelData = {};
-                jsonData.forEach(row => {
-                    if (row[0]) {
-                        excelData[row[0]] = row.slice(1, 10);
-                    }
-                });
+            uploadTask.on('state_changed', 
+                (snapshot) => {
+                    // می‌توانید اینجا پیشرفت آپلود را نمایش دهید
+                }, 
+                (error) => {
+                    console.error("خطا در آپلود فایل:", error);
+                    alert("خطا در آپلود فایل. لطفاً دوباره تلاش کنید.");
+                }, 
+                async () => {
+                    // وقتی فایل با موفقیت آپلود شد
+                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    console.log("لینک فایل آپلود شده:", downloadURL);
 
-                await setDoc(doc(db, "excelData", "latest"), { data: excelData });
-                alert("فایل با موفقیت بارگذاری و به دیتابیس ارسال گردید");
-            };
+                    // حالا لینک فایل را در دیتابیس Firestore ذخیره می‌کنیم
+                    let jsonData = {};  // می‌توانید داده‌های اکسل را که نیاز دارید هم ارسال کنید
+                    await setDoc(doc(db, "excelData", "latest"), { fileUrl: downloadURL, data: jsonData });
+
+                    alert("فایل با موفقیت بارگذاری و به دیتابیس ارسال گردید");
+                    console.log("فایل در Firebase ذخیره شد:", downloadURL); // تایید بارگذاری در کنسول
+                }
+            );
         };
 
         window.searchTerminal = async function() {
@@ -84,7 +91,7 @@
                     alert("کد پایانه در فایل نیست!");
                 }
             } else {
-                alert("دیتابیس آماده نمی‌باشد!");
+                alert("لطفاً جهت بارگذاری دیتابیس به ادمین اطلاع دهید.");
             }
         };
     </script>
