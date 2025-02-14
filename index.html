@@ -61,18 +61,11 @@
                     alert("خطا در آپلود فایل. لطفاً دوباره تلاش کنید.");
                 }, 
                 async () => {
-                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref());
+                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                     let data = await readExcelData(file);
                     await setDoc(doc(db, "excelData", "latest"), { fileUrl: downloadURL, data });
 
-                    // بررسی ذخیره‌سازی
-                    let docSnap = await getDoc(doc(db, "excelData", "latest"));
-                    if (docSnap.exists()) {
-                        alert("فایل با موفقیت بارگذاری شد");
-                    } else {
-                        alert("خطا در ذخیره‌سازی فایل در دیتابیس.");
-                    }
-
+                    alert("فایل با موفقیت بارگذاری شد");
                     loadFilesList();  // Reload the file list after upload
                 }
             );
@@ -110,15 +103,19 @@
                 let fileData = doc.data();
                 let fileElement = document.createElement("div");
                 fileElement.innerHTML = `
+                    <input type="checkbox" class="fileCheckbox" data-id="${doc.id}" />
                     <span>${fileData.fileUrl}</span> - <span>${new Date(doc.id).toLocaleString()}</span>
-                    <button onclick="deleteFile('${doc.id}')">حذف</button>
                 `;
                 filesListDiv.appendChild(fileElement);
             });
         };
 
-        window.deleteFile = async function(fileId) {
-            await deleteDoc(doc(db, "excelData", fileId));
+        window.deleteFile = async function() {
+            const selectedFiles = document.querySelectorAll(".fileCheckbox:checked");
+            selectedFiles.forEach(async (checkbox) => {
+                let fileId = checkbox.getAttribute("data-id");
+                await deleteDoc(doc(db, "excelData", fileId));
+            });
             loadFilesList();
             alert("فایل با موفقیت حذف شد");
         };
@@ -132,7 +129,6 @@
 
             let docSnap = await getDoc(doc(db, "excelData", "latest"));
             if (docSnap.exists()) {
-                console.log("Data from Firebase:", docSnap.data());  // بررسی داده‌ها از Firebase
                 latestFileData = docSnap.data().data;
                 if (latestFileData[terminalCode]) {
                     displayResults(latestFileData[terminalCode]);
@@ -140,7 +136,7 @@
                     alert("کد پایانه در فایل نیست!");
                 }
             } else {
-                alert("لطفاً جهت بارگذاری دیتابیس به ادمین اطلاع دهید.");
+                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
             }
         };
 
@@ -166,7 +162,7 @@
             });
             resultsDiv.style.display = "block";
         }
-        
+
         window.checkFileExistence = async function() {
             const docSnap = await getDoc(doc(db, "excelData", "latest"));
             if (!docSnap.exists()) {
@@ -174,7 +170,6 @@
             }
         };
 
-        // Restrict input to exactly 8 digits
         document.getElementById("terminalCode").addEventListener("input", function(event) {
             let value = event.target.value;
             if (value.length > 8) {
@@ -182,7 +177,6 @@
             }
         });
 
-        // Check file existence when page loads
         window.onload = function() {
             checkFileExistence();
         };
@@ -201,16 +195,6 @@
             margin: 0;
             padding: 0;
             background-color: #f5f5f5;
-        }
-
-        .container {
-            padding: 20px;
-            background: white;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            border-radius: 10px;
-            width: 50%;
-            margin: 50px auto;
-            border: 2px solid #821840;
         }
 
         .login-container {
@@ -253,23 +237,35 @@
     </style>
 </head>
 <body>
-    <div id="loginPanel">
+    <!-- صفحه اول سایت -->
+    <div>
+        <div class="login-container">
+            <button onclick="showLogin()">ورود به ادمین</button>
+        </div>
+
+        <h2>جستجو در فایل اکسل</h2>
+        <input type="text" id="terminalCode" placeholder="کد پایانه" />
+        <button onclick="searchTerminal()">جستجو</button>
+        <div id="results" class="results"></div>
+    </div>
+
+    <!-- صفحه ورود -->
+    <div id="loginPanel" class="hidden">
         <div class="container">
             <input type="text" id="username" placeholder="نام کاربری" />
             <input type="password" id="password" placeholder="رمز عبور" />
             <button onclick="adminLogin()">ورود به پنل ادمین</button>
         </div>
     </div>
+
+    <!-- پنل ادمین -->
     <div id="adminPanel" class="hidden">
+        <h3>پنل ادمین</h3>
         <button onclick="loadFilesList()">نمایش فایل‌های موجود</button>
-        <button onclick="uploadExcel()">بارگذاری فایل جدید</button>
-        <div id="filesList"></div>
         <button onclick="deleteFile()">حذف فایل‌ها</button>
+        <input type="file" id="excelFile" />
+        <button onclick="uploadExcel()">بارگزاری فایل</button>
+        <div id="filesList"></div>
     </div>
-    <div class="search-container">
-        <input type="text" id="terminalCode" placeholder="کد پایانه ۸ رقمی را وارد کنید" />
-        <button onclick="searchTerminal()">جستجو</button>
-    </div>
-    <div id="results" class="results"></div>
 </body>
 </html>
