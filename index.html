@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>جستجو در فایل اکسل</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+        import { getFirestore, collection, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+
+      const firebaseConfig = {
+  apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
+  authDomain: "amir8854-60513.firebaseapp.com",
+  projectId: "amir8854-60513",
+  storageBucket: "amir8854-60513.firebasestorage.app",
+  messagingSenderId: "994691127373",
+  appId: "1:994691127373:web:51894ca67eab2e7cde2404",
+  measurementId: "G-71693W741C"
+};
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.showLogin = function() {
+            document.getElementById("loginPanel").classList.remove("hidden");
+        };
+
+        window.adminLogin = function() {
+            let user = document.getElementById("username").value;
+            let pass = document.getElementById("password").value;
+            if (user === "amir8854" && pass === "amir8854") {
+                alert("ورود موفقیت‌آمیز بود");
+                document.getElementById("adminPanel").classList.remove("hidden");
+                document.getElementById("loginPanel").classList.add("hidden");
+            } else {
+                alert("نام کاربری یا رمز عبور اشتباه است");
+            }
+        };
+
+        window.uploadExcel = async function() {
+            let fileInput = document.getElementById("excelFile");
+            if (!fileInput.files.length) {
+                alert("لطفاً یک فایل انتخاب کنید!");
+                return;
+            }
+
+            let file = fileInput.files[0];
+            let reader = new FileReader();
+            reader.readAsBinaryString(file);
+            reader.onload = async function(e) {
+                let data = new Uint8Array(e.target.result);
+                let workbook = XLSX.read(data, { type: 'array' });
+                let sheetName = workbook.SheetNames[0];
+                let sheet = workbook.Sheets[sheetName];
+                let jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+
+                let excelData = {};
+                jsonData.forEach(row => {
+                    if (row[0]) {
+                        excelData[row[0]] = row.slice(1, 10);
+                    }
+                });
+
+                await setDoc(doc(db, "excelData", "latest"), { data: excelData });
+                alert("فایل با موفقیت بارگذاری و به دیتابیس ارسال گردید");
+            };
+        };
+
+        window.searchTerminal = async function() {
+            let terminalCode = document.getElementById("terminalCode").value.trim();
+            if (!terminalCode || terminalCode.length !== 8 || !/^[0-9]+$/.test(terminalCode)) {
+                alert("کد پایانه باید ۸ رقمی و فقط شامل اعداد باشد!");
+                return;
+            }
+
+            let docSnap = await getDoc(doc(db, "excelData", "latest"));
+            if (docSnap.exists()) {
+                let data = docSnap.data().data;
+                if (data[terminalCode]) {
+                    document.getElementById("results").innerText = data[terminalCode].join(" | ");
+                    document.getElementById("results").style.display = "block";
+                } else {
+                    alert("کد پایانه در فایل نیست!");
+                }
+            } else {
+                alert("دیتابیس آماده نمی‌باشد!");
+            }
+        };
+    </script>
+    <style>
+        @font-face {
+            font-family: 'BHOMA';
+            src: url('fonts/BHOMA.woff2') format('woff2'),
+                 url('fonts/BHOMA.woff') format('woff');
+        }
+
+        body {
+            font-family: 'BHOMA', Arial, sans-serif;
+            text-align: center;
+            direction: rtl;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            padding: 20px;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            width: 50%;
+            margin: 50px auto;
+            border: 2px solid #821840;
+        }
+
+        .login-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+
+        input, button {
+            font-family: inherit;
+            padding: 10px;
+            margin: 10px;
+            width: 80%;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        button {
+            background-color: #821840;
+            color: white;
+            cursor: pointer;
+            border: none;
+        }
+
+        button:hover {
+            background-color: #5a102b;
+        }
+
+        .results {
+            display: none;
+            margin-top: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <button onclick="showLogin()">ورود ادمین</button>
+    </div>
+
+    <div class="container hidden" id="loginPanel">
+        <h2>ورود ادمین</h2>
+        <input type="text" id="username" placeholder="نام کاربری">
+        <input type="password" id="password" placeholder="رمز عبور">
+        <button onclick="adminLogin()">ورود</button>
+    </div>
+
+    <div class="container">
+        <h1>لطفا کد پایانه را وارد کنید</h1>
+        <input type="text" id="terminalCode" placeholder="کد پایانه (۸ رقمی)" oninput="this.value=this.value.replace(/[^0-9]/g, '');">
+        <button onclick="searchTerminal()">جستجو</button>
+        <div id="results" class="results"></div>
+    </div>
+
+    <div class="container hidden" id="adminPanel">
+        <h2>آپلود فایل اکسل</h2>
+        <input type="file" id="excelFile" accept=".xlsx, .xls">
+        <button onclick="uploadExcel()">بارگذاری فایل</button>
+    </div>
+</body>
+</html>
