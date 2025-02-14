@@ -5,191 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>جستجو در فایل اکسل</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, collection, setDoc, doc, getDoc, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-storage.js";
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
-            authDomain: "amir8854-60513.firebaseapp.com",
-            projectId: "amir8854-60513",
-            storageBucket: "amir8854-60513.firebasestorage.app",
-            messagingSenderId: "994691127373",
-            appId: "1:994691127373:web:51894ca67eab2e7cde2404",
-            measurementId: "G-71693W741C"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const storage = getStorage();
-
-        let latestFileData = {};  // Store latest file data to use in search
-
-        window.showLogin = function() {
-            document.getElementById("loginPanel").classList.remove("hidden");
-        };
-
-        window.adminLogin = function() {
-            let user = document.getElementById("username").value;
-            let pass = document.getElementById("password").value;
-            if (user === "amir8854" && pass === "amir8854") {
-                alert("ورود موفقیت‌آمیز بود");
-                document.getElementById("adminPanel").classList.remove("hidden");
-                document.getElementById("loginPanel").classList.add("hidden");
-                loadFilesList();
-            } else {
-                alert("نام کاربری یا رمز عبور اشتباه است");
-            }
-        };
-
-        window.uploadExcel = async function() {
-            let fileInput = document.getElementById("excelFile");
-            if (!fileInput.files.length) {
-                alert("لطفاً یک فایل انتخاب کنید!");
-                return;
-            }
-
-            let file = fileInput.files[0];
-            let storageRef = ref(storage, 'excelFiles/' + file.name);
-            let uploadTask = uploadBytesResumable(storageRef, file);
-
-            uploadTask.on('state_changed', 
-                (snapshot) => {},
-                (error) => {
-                    console.error("خطا در آپلود فایل:", error);
-                    alert("خطا در آپلود فایل. لطفاً دوباره تلاش کنید.");
-                }, 
-                async () => {
-                    let downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    let data = await readExcelData(file);
-                    await setDoc(doc(db, "excelData", "latest"), { fileUrl: downloadURL, data });
-
-                    alert("فایل با موفقیت بارگذاری شد");
-                    loadFilesList();  // Reload the file list after upload
-                }
-            );
-        };
-
-        async function readExcelData(file) {
-            const reader = new FileReader();
-            reader.readAsArrayBuffer(file);
-            return new Promise((resolve, reject) => {
-                reader.onload = async function(event) {
-                    const data = new Uint8Array(event.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-                    let extractedData = {};
-                    rows.forEach((row, index) => {
-                        if (index === 0) return;  // Skip the header row
-                        extractedData[row[0]] = row.slice(1);  // First column as key, remaining as values
-                    });
-                    resolve(extractedData);
-                };
-                reader.onerror = reject;
-            });
-        }
-
-        window.loadFilesList = async function() {
-            const filesListDiv = document.getElementById("filesList");
-            filesListDiv.innerHTML = "";
-            const querySnapshot = await getDocs(collection(db, "excelData"));
-            if (querySnapshot.empty) {
-                filesListDiv.innerHTML = "<p>فایلی در دیتابیس وجود ندارد. لطفاً به ادمین اطلاع دهید.</p>";
-                return;
-            }
-            querySnapshot.forEach((doc) => {
-                let fileData = doc.data();
-                let fileElement = document.createElement("div");
-                fileElement.innerHTML = `
-                    <input type="checkbox" class="fileCheckbox" data-id="${doc.id}" />
-                    <span>${fileData.fileUrl}</span> - <span>${new Date(doc.id).toLocaleString()}</span>
-                `;
-                filesListDiv.appendChild(fileElement);
-            });
-        };
-
-        window.deleteFile = async function() {
-            const selectedFiles = document.querySelectorAll(".fileCheckbox:checked");
-            selectedFiles.forEach(async (checkbox) => {
-                let fileId = checkbox.getAttribute("data-id");
-                await deleteDoc(doc(db, "excelData", fileId));
-            });
-            loadFilesList();
-            alert("فایل با موفقیت حذف شد");
-        };
-
-        window.searchTerminal = async function() {
-            let terminalCode = document.getElementById("terminalCode").value.trim();
-            if (terminalCode.length !== 8) {
-                alert("کد پایانه باید ۸ رقمی باشد!");
-                return;
-            }
-
-            let docSnap = await getDoc(doc(db, "excelData", "latest"));
-            if (docSnap.exists()) {
-                latestFileData = docSnap.data().data;
-                if (latestFileData[terminalCode]) {
-                    displayResults(latestFileData[terminalCode]);
-                } else {
-                    alert("کد پایانه در فایل نیست!");
-                }
-            } else {
-                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
-            }
-        };
-
-        function displayResults(data) {
-            let resultsDiv = document.getElementById("results");
-            resultsDiv.innerHTML = "";
-            data.forEach((item, index) => {
-                let box = document.createElement("div");
-                box.style.display = "inline-block";
-                box.style.margin = "5px";
-                box.style.padding = "10px";
-                box.style.background = "#f0f0f0";
-                box.style.borderRadius = "5px";
-                box.textContent = item;
-                if (index < 4) {
-                    box.style.width = "45%";
-                } else if (index < 8) {
-                    box.style.width = "45%";
-                } else {
-                    box.style.width = "90%";
-                }
-                resultsDiv.appendChild(box);
-            });
-            resultsDiv.style.display = "block";
-        }
-
-        window.checkFileExistence = async function() {
-            const docSnap = await getDoc(doc(db, "excelData", "latest"));
-            if (!docSnap.exists()) {
-                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
-            }
-        };
-
-        document.getElementById("terminalCode").addEventListener("input", function(event) {
-            let value = event.target.value;
-            if (value.length > 8) {
-                event.target.value = value.slice(0, 8);
-            }
-        });
-
-        window.onload = function() {
-            checkFileExistence();
-        };
-    </script>
     <style>
         @font-face {
             font-family: 'BHOMA';
-            src: url('fonts/BHOMA.woff2') format('woff2'),
-                 url('fonts/BHOMA.woff') format('woff');
+            src: url('fonts/BHOMA.woff') format('woff');
         }
 
         body {
-            font-family: 'BHOMA', Arial, sans-serif;
+            font-family: 'BHOMA', sans-serif;
             text-align: center;
             direction: rtl;
             margin: 0;
@@ -197,17 +23,10 @@
             background-color: #f5f5f5;
         }
 
-        .login-container {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-        }
-
         input, button {
-            font-family: inherit;
             padding: 10px;
             margin: 10px;
-            width: 80%;
+            width: 25%; /* تغییر عرض دکمه‌ها به یک چهارم */
             border: 1px solid #ccc;
             border-radius: 5px;
             font-size: 16px;
@@ -234,17 +53,33 @@
         }
 
         .hidden { display: none; }
+
+        .result-box {
+            margin: 10px;
+            display: inline-block;
+            width: calc(33.33% - 20px);
+            text-align: center;
+        }
+
+        .result-box input {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <!-- صفحه اول سایت -->
     <div>
         <div class="login-container">
-            <button onclick="showLogin()">ورود به ادمین</button>
+            <button onclick="showLogin()">ورود</button> <!-- تغییر نام دکمه -->
         </div>
 
         <h2>جستجو در فایل اکسل</h2>
-        <input type="text" id="terminalCode" placeholder="کد پایانه" />
+        <input type="text" id="terminalCode" placeholder="کد پایانه" maxlength="8" pattern="[0-9]*" oninput="validateCode(event)" />
         <button onclick="searchTerminal()">جستجو</button>
         <div id="results" class="results"></div>
     </div>
@@ -267,5 +102,173 @@
         <button onclick="uploadExcel()">بارگزاری فایل</button>
         <div id="filesList"></div>
     </div>
+
+    <script>
+        // تنظیمات Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
+            authDomain: "amir8854-60513.firebaseapp.com",
+            projectId: "amir8854-60513",
+            storageBucket: "amir8854-60513.firebasestorage.app",
+            messagingSenderId: "994691127373",
+            appId: "1:994691127373:web:51894ca67eab2e7cde2404",
+            measurementId: "G-71693W741C"
+        };
+
+        // راه‌اندازی Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        window.showLogin = function() {
+            document.getElementById("loginPanel").classList.remove("hidden");
+        };
+
+        window.adminLogin = function() {
+            let user = document.getElementById("username").value;
+            let pass = document.getElementById("password").value;
+            if (user === "amir8854" && pass === "amir8854") {
+                alert("ورود موفقیت‌آمیز بود");
+                document.getElementById("adminPanel").classList.remove("hidden");
+                document.getElementById("loginPanel").classList.add("hidden");
+                loadFilesList();
+            } else {
+                alert("نام کاربری یا رمز عبور اشتباه است");
+            }
+        };
+
+        window.uploadExcel = async function() {
+            let fileInput = document.getElementById("excelFile");
+            if (!fileInput.files.length) {
+                alert("لطفاً یک فایل انتخاب کنید!");
+                return;
+            }
+
+            let file = fileInput.files[0];
+            let data = await readExcelData(file);
+            await db.collection("excelData").add({ data });
+
+            alert("فایل با موفقیت بارگذاری شد");
+            loadFilesList();
+        };
+
+        async function readExcelData(file) {
+            const reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            return new Promise((resolve, reject) => {
+                reader.onload = async function(event) {
+                    const data = new Uint8Array(event.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    let extractedData = {};
+                    rows.forEach((row, index) => {
+                        if (index === 0) return;  // Skip the header row
+                        extractedData[row[0]] = row.slice(1);  // First column as key, remaining as values
+                    });
+                    resolve(extractedData);
+                };
+                reader.onerror = reject;
+            });
+        }
+
+        window.loadFilesList = async function() {
+            const filesListDiv = document.getElementById("filesList");
+            filesListDiv.innerHTML = "";
+            const querySnapshot = await db.collection("excelData").get();
+            if (querySnapshot.empty) {
+                filesListDiv.innerHTML = "<p>فایلی در دیتابیس وجود ندارد. لطفاً به ادمین اطلاع دهید.</p>";
+                return;
+            }
+            querySnapshot.forEach((doc) => {
+                let fileData = doc.data();
+                let fileElement = document.createElement("div");
+                fileElement.innerHTML = ` 
+                    <span>فایل ${new Date(doc.id).toLocaleString()}</span>
+                `;
+                filesListDiv.appendChild(fileElement);
+            });
+        };
+
+        window.deleteFile = async function() {
+            const selectedFiles = document.querySelectorAll(".fileCheckbox:checked");
+            selectedFiles.forEach(async (checkbox) => {
+                let fileId = checkbox.getAttribute("data-id");
+                await db.collection("excelData").doc(fileId).delete();
+            });
+            loadFilesList();
+            alert("فایل با موفقیت حذف شد");
+        };
+
+        window.searchTerminal = async function() {
+            let terminalCode = document.getElementById("terminalCode").value.trim();
+            if (terminalCode.length !== 8) {
+                alert("کد پایانه باید ۸ رقمی باشد!");
+                return;
+            }
+
+            let querySnapshot = await db.collection("excelData").get();
+            if (querySnapshot.empty) {
+                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
+                return;
+            }
+
+            let dataFound = false;
+            querySnapshot.forEach((doc) => {
+                let fileData = doc.data().data;
+                console.log("داده‌های دریافت‌شده از فایل:", fileData);
+
+                if (fileData[terminalCode]) {
+                    dataFound = true;
+                    console.log("داده‌های پیدا شده:", fileData[terminalCode]);
+                    displayResults(fileData[terminalCode]);
+                }
+            });
+
+            if (!dataFound) {
+                alert("کد پایانه در فایل نیست!");
+            }
+        };
+
+        function displayResults(data) {
+            let resultsDiv = document.getElementById("results");
+            resultsDiv.innerHTML = '';  // ابتدا محتوای قبلی را پاک می‌کنیم
+
+            let columns = [
+                { id: 'column1', label: 'ستون 1', value: data[0] },
+                { id: 'column2', label: 'ستون 2', value: data[1] },
+                { id: 'column3', label: 'ستون 3', value: data[2] },
+                { id: 'column4', label: 'ستون 4', value: data[3] },
+                { id: 'column5', label: 'ستون 5', value: data[4] },
+                { id: 'column6', label: 'ستون 6', value: data[5] },
+                { id: 'column7', label: 'ستون 7', value: data[6] },
+                { id: 'column8', label: 'ستون 8', value: data[7] },
+                { id: 'column9', label: 'ستون 9', value: data[8] }
+            ];
+
+            columns.forEach((col) => {
+                let columnDiv = document.createElement("div");
+                columnDiv.classList.add("result-box");
+                columnDiv.innerHTML = `
+                    <strong>${col.label}:</strong>
+                    <input type="text" value="${col.value}" readonly />
+                `;
+                resultsDiv.appendChild(columnDiv);
+            });
+
+            resultsDiv.classList.remove("hidden");  // نمایش نتایج
+            resultsDiv.style.display = 'block';  // اطمینان از نمایش div
+        }
+
+        function validateCode(event) {
+            let input = event.target;
+            let value = input.value;
+
+            if (value.length > 8) {
+                input.value = value.slice(0, 8);
+            } else {
+                input.value = value.replace(/[^0-9]/g, '');  // حذف غیر اعداد
+            }
+        }
+    </script>
 </body>
 </html>
