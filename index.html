@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>جستجو در فایل اکسل</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.0/xlsx.full.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
 
     <style>
         @font-face {
@@ -26,7 +24,7 @@
         input, button {
             padding: 10px;
             margin: 10px;
-            width: 25%; /* تغییر عرض دکمه‌ها به یک چهارم */
+            width: 25%;
             border: 1px solid #ccc;
             border-radius: 5px;
             font-size: 16px;
@@ -69,13 +67,82 @@
             border-radius: 5px;
             text-align: center;
         }
+
+        .progress-bar-container {
+            width: 100%;
+            background-color: #f3f3f3;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .progress-bar {
+            height: 20px;
+            width: 0%;
+            background-color: #4caf50;
+            border-radius: 10px;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+
+        .panel {
+            margin: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .admin-panel {
+            display: none;
+        }
+
+        /* اصلاحات پنل ادمین */
+        .admin-panel button, .admin-panel input {
+            width: 45%; /* عرض کمتر برای دکمه‌ها و ورودی‌ها */
+        }
+
+        .admin-panel button {
+            margin: 10px 10px 20px 10px;
+        }
+
+        .admin-panel .separator {
+            margin-top: 20px;
+            border-top: 1px dashed #ccc;
+        }
+
+        .admin-panel .file-upload-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 2px solid #821840;
+            border-radius: 5px;
+            display: inline-block;
+            width: 100%;
+            text-align: center;
+        }
+
+        .admin-panel .file-upload-container input {
+            width: 90%; /* برای هماهنگ بودن با دکمه‌ها */
+        }
+
+        .admin-panel .file-upload-container button {
+            width: 90%;
+        }
+
+        .admin-panel .progress-bar-container {
+            width: 100%;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <!-- صفحه اول سایت -->
-    <div>
+    <div id="mainPage">
         <div class="login-container">
-            <button onclick="showLogin()">ورود</button> <!-- تغییر نام دکمه -->
+            <button onclick="showLogin()">ورود</button>
         </div>
 
         <h2>جستجو در فایل اکسل</h2>
@@ -86,7 +153,7 @@
 
     <!-- صفحه ورود -->
     <div id="loginPanel" class="hidden">
-        <div class="container">
+        <div class="container panel">
             <input type="text" id="username" placeholder="نام کاربری" />
             <input type="password" id="password" placeholder="رمز عبور" />
             <button onclick="adminLogin()">ورود به پنل ادمین</button>
@@ -94,33 +161,43 @@
     </div>
 
     <!-- پنل ادمین -->
-    <div id="adminPanel" class="hidden">
-        <h3>پنل ادمین</h3>
-        <button onclick="loadFilesList()">نمایش فایل‌های موجود</button>
-        <button onclick="deleteFile()">حذف فایل‌ها</button>
-        <input type="file" id="excelFile" />
-        <button onclick="uploadExcel()">بارگزاری فایل</button>
-        <div id="filesList"></div>
+    <div id="adminPanel" class="admin-panel">
+        <div class="panel">
+            <h3>پنل ادمین</h3>
+            
+            <!-- دکمه‌ها در ردیف بالا -->
+            <div style="display: flex; justify-content: space-around;">
+                <button onclick="loadFilesList()">نمایش فایل‌های موجود</button>
+                <button onclick="deleteFile()">حذف فایل‌ها</button>
+            </div>
+
+            <!-- خط چین -->
+            <div class="separator"></div>
+
+            <!-- کادر انتخاب فایل -->
+            <div class="file-upload-container">
+                <input type="file" id="excelFile" />
+            </div>
+
+            <!-- دکمه بارگزاری فایل -->
+            <button onclick="uploadExcel()">بارگزاری فایل</button>
+
+            <!-- درصد پیشرفت -->
+            <div class="progress-bar-container">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <div id="progressText" class="progress-text"></div>
+
+            <div id="filesList"></div>
+            <!-- دکمه خروج -->
+            <button onclick="logout()">خروج</button>
+        </div>
     </div>
 
     <script>
-        // تنظیمات Firebase
-        const firebaseConfig = {
-            apiKey: "AIzaSyDg-13Xs64x649B-b759AGIvg0UK9jWH_I",
-            authDomain: "amir8854-60513.firebaseapp.com",
-            projectId: "amir8854-60513",
-            storageBucket: "amir8854-60513.firebasestorage.app",
-            messagingSenderId: "994691127373",
-            appId: "1:994691127373:web:51894ca67eab2e7cde2404",
-            measurementId: "G-71693W741C"
-        };
-
-        // راه‌اندازی Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
         window.showLogin = function() {
             document.getElementById("loginPanel").classList.remove("hidden");
+            document.getElementById("mainPage").classList.add("hidden");
         };
 
         window.adminLogin = function() {
@@ -128,9 +205,8 @@
             let pass = document.getElementById("password").value;
             if (user === "amir8854" && pass === "amir8854") {
                 alert("ورود موفقیت‌آمیز بود");
-                document.getElementById("adminPanel").classList.remove("hidden");
+                document.getElementById("adminPanel").classList.remove("admin-panel");
                 document.getElementById("loginPanel").classList.add("hidden");
-                loadFilesList();
             } else {
                 alert("نام کاربری یا رمز عبور اشتباه است");
             }
@@ -145,11 +221,30 @@
 
             let file = fileInput.files[0];
             let data = await readExcelData(file);
-            await db.collection("excelData").add({ data });
 
-            alert("فایل با موفقیت بارگذاری شد");
-            loadFilesList();
+            let progress = 0;
+            let interval = setInterval(function() {
+                if (progress < 100) {
+                    progress += 10;
+                    updateProgress(progress);
+                } else {
+                    clearInterval(interval);
+                    alert("فایل با موفقیت بارگذاری شد");
+                    loadFilesList();
+                }
+            }, 500);
+
+            await fetch(`/api/firestore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ collection: "excelData", data })
+            });
         };
+
+        function updateProgress(progress) {
+            document.getElementById("progressBar").style.width = progress + "%";
+            document.getElementById("progressText").innerText = progress + "% از فایل آپلود شده است";
+        }
 
         async function readExcelData(file) {
             const reader = new FileReader();
@@ -162,8 +257,8 @@
                     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                     let extractedData = {};
                     rows.forEach((row, index) => {
-                        if (index === 0) return;  // Skip the header row
-                        extractedData[row[0]] = row.slice(1);  // First column as key, remaining as values
+                        if (index === 0) return;
+                        extractedData[row[0]] = row.slice(1);
                     });
                     resolve(extractedData);
                 };
@@ -174,17 +269,22 @@
         window.loadFilesList = async function() {
             const filesListDiv = document.getElementById("filesList");
             filesListDiv.innerHTML = "";
-            const querySnapshot = await db.collection("excelData").get();
-            if (querySnapshot.empty) {
+
+            let response = await fetch(`/api/firestore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ collection: "excelData" })
+            });
+            let files = await response.json();
+
+            if (!files || files.length === 0) {
                 filesListDiv.innerHTML = "<p>فایلی در دیتابیس وجود ندارد. لطفاً به ادمین اطلاع دهید.</p>";
                 return;
             }
-            querySnapshot.forEach((doc) => {
-                let fileData = doc.data();
+
+            files.forEach((file) => {
                 let fileElement = document.createElement("div");
-                fileElement.innerHTML = ` 
-                    <span>فایل ${new Date(doc.id).toLocaleString()}</span>
-                `;
+                fileElement.innerHTML = `<span>فایل ${new Date(file.id).toLocaleString()}</span>`;
                 filesListDiv.appendChild(fileElement);
             });
         };
@@ -193,10 +293,20 @@
             const selectedFiles = document.querySelectorAll(".fileCheckbox:checked");
             selectedFiles.forEach(async (checkbox) => {
                 let fileId = checkbox.getAttribute("data-id");
-                await db.collection("excelData").doc(fileId).delete();
+
+                await fetch(`/api/firestore`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ collection: "excelData", docId: fileId })
+                });
             });
             loadFilesList();
             alert("فایل با موفقیت حذف شد");
+        };
+
+        window.logout = function() {
+            document.getElementById("adminPanel").classList.add("admin-panel");
+            document.getElementById("mainPage").classList.remove("hidden");
         };
 
         window.searchTerminal = async function() {
@@ -206,68 +316,39 @@
                 return;
             }
 
-            let querySnapshot = await db.collection("excelData").get();
-            if (querySnapshot.empty) {
-                alert("فایلی در دیتابیس موجود نیست. لطفاً به ادمین اطلاع دهید.");
-                return;
-            }
-
-            let dataFound = false;
-            querySnapshot.forEach((doc) => {
-                let fileData = doc.data().data;
-                console.log("داده‌های دریافت‌شده از فایل:", fileData);
-
-                if (fileData[terminalCode]) {
-                    dataFound = true;
-                    console.log("داده‌های پیدا شده:", fileData[terminalCode]);
-                    displayResults(fileData[terminalCode]);
-                }
+            let response = await fetch(`/api/firestore`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ collection: "excelData", docId: terminalCode })
             });
+            let result = await response.json();
 
-            if (!dataFound) {
-                alert("کد پایانه در فایل نیست!");
+            if (result.error) {
+                alert(result.error);
+            } else {
+                displayResults(result);
             }
         };
 
         function displayResults(data) {
             let resultsDiv = document.getElementById("results");
-            resultsDiv.innerHTML = '';  // ابتدا محتوای قبلی را پاک می‌کنیم
+            resultsDiv.innerHTML = ''; 
 
             let columns = [
                 { id: 'column1', label: 'ستون 1', value: data[0] },
                 { id: 'column2', label: 'ستون 2', value: data[1] },
                 { id: 'column3', label: 'ستون 3', value: data[2] },
-                { id: 'column4', label: 'ستون 4', value: data[3] },
-                { id: 'column5', label: 'ستون 5', value: data[4] },
-                { id: 'column6', label: 'ستون 6', value: data[5] },
-                { id: 'column7', label: 'ستون 7', value: data[6] },
-                { id: 'column8', label: 'ستون 8', value: data[7] },
-                { id: 'column9', label: 'ستون 9', value: data[8] }
+                { id: 'column4', label: 'ستون 4', value: data[3] }
             ];
 
             columns.forEach((col) => {
-                let columnDiv = document.createElement("div");
-                columnDiv.classList.add("result-box");
-                columnDiv.innerHTML = `
-                    <strong>${col.label}:</strong>
-                    <input type="text" value="${col.value}" readonly />
-                `;
-                resultsDiv.appendChild(columnDiv);
+                let box = document.createElement('div');
+                box.classList.add('result-box');
+                box.innerHTML = `<input type="text" value="${col.value}" disabled />`;
+                resultsDiv.appendChild(box);
             });
 
-            resultsDiv.classList.remove("hidden");  // نمایش نتایج
-            resultsDiv.style.display = 'block';  // اطمینان از نمایش div
-        }
-
-        function validateCode(event) {
-            let input = event.target;
-            let value = input.value;
-
-            if (value.length > 8) {
-                input.value = value.slice(0, 8);
-            } else {
-                input.value = value.replace(/[^0-9]/g, '');  // حذف غیر اعداد
-            }
+            resultsDiv.style.display = 'block';
         }
     </script>
 </body>
